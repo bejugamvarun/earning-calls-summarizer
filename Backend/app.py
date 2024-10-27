@@ -56,8 +56,8 @@ async def log_requests(request: Request, call_next):
 async def summarize_earnings(request: EarningsRequest):
     try:
         # Store and summarize the earnings for the whole year
-        transcripts = summarize_and_store(request.company_name, request.year)
-        summary = retrieve_and_summarize(transcripts)
+        summarize_and_store(request.company_name, request.year)
+        summary = retrieve_and_summarize(request.company_name, request.year)
         return {"message": summary}
     except Exception as e:
         logger.error(f"Error summarizing earnings for {request.company_name}: {str(e)}")
@@ -68,9 +68,8 @@ async def compare_earnings(request: ComparativeRequest):
     comparative_report = {}
     try:
         for company in request.company_names:
-            transcripts = summarize_and_store(company, request.year)
-            summary = retrieve_and_summarize(transcripts)
-            comparative_report[company] = summary
+            summarize_and_store(company, request.year)
+            comparative_report[company] = retrieve_and_summarize(company, request.year)
         return {"comparative_report": comparative_report}
     except Exception as e:
         logger.error(f"Error comparing earnings: {str(e)}")

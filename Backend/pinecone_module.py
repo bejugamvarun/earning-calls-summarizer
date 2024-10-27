@@ -41,55 +41,63 @@ if index_name not in pc.list_indexes().names():
 index = pc.Index(index_name)  # Get the index object
 
 # Set up the OpenAI Embeddings model
-embeddings_model = OpenAIEmbeddings()
+embeddings_model = OpenAIEmbeddings(model="text-embedding-3-small")
 
 
-def store_transcript_in_pinecone(transcripts, company_name):
+def store_quarterly_embeddings(company_name, year, transcripts):
     """
-    Store the combined transcript embeddings in Pinecone under one unique key (company_name).
-    - transcripts: A dictionary containing the quarterly transcripts.
-    - company_name: The unique key under which to store the embeddings.
-    """
-    # Concatenate the transcripts into one string
-    combined_transcript = " ".join(transcripts.values())
-
-    # Vectorize the combined transcript
-    vector = embeddings_model.embed_query(combined_transcript)
-
-    # Store the combined embedding in Pinecone with metadata
-    index.upsert(vectors=[{
-        "id": company_name,  # Store everything under one key (the company name)
-        "values": vector,
-        "metadata": {
-            "company_name": company_name,
-            "quarters": list(transcripts.keys()),  # Store the quarters in metadata
-            "transcripts": transcripts  # Optionally, store the original transcripts in metadata
-        }
-    }])
-    
-    return f"Combined transcript for {company_name} stored in Pinecone."
-
-
-# Example function to fetch transcripts and store in Pinecone
-def summarize_and_store(company_name, year):
-    """
-    Fetch transcripts, store embeddings, and summarize the data.
+    Store the earnings call embeddings for each quarter of a company in Pinecone.
+    - transcripts: A dictionary containing transcripts for each quarter.
+    - company_name: The company's name (e.g., "AAPL").
+    - year: The year of the earnings call (e.g., 2024).
     """
     try:
-        # Step 1: Fetch earnings call transcripts for all quarters
+        # Prepare vectors for each quarter
+        pinecone_vectors = []
+        for quarter, transcript in transcripts.items():
+            if transcript != "No data available for this quarter.":
+                # Generate embedding for the transcript
+                vector = embeddings_model.embed_query(transcript)
+                # Create a unique ID for each quarter
+                record_id = f"{company_name}_{year}_Q{quarter}"
+                # Prepare the vector data for upsertion
+                pinecone_vectors.append({
+                    "id": record_id,
+                    "values": vector,
+                    "metadata": {
+                        "company_name": company_name,
+                        "year": year,
+                        "quarter": f"Q{quarter}",
+                        "transcript": transcript
+                    }
+                })
+
+        # Upsert all vectors in a batch to Pinecone
+        if pinecone_vectors:
+            index.upsert(vectors=pinecone_vectors)
+            logger.info(f"Stored embeddings for {company_name} for year {year}")
+        else:
+            logger.warning(f"No valid transcripts to store for {company_name} in {year}")
+    
+    except Exception as e:
+        logger.error(f"Error storing embeddings for {company_name}: {str(e)}")
+
+def summarize_and_store(company_name, year):
+    """
+    Fetch transcripts for all quarters, store embeddings, and return the transcripts.
+    """
+    try:
         transcripts = {}
         for quarter in range(1, 5):  # Q1 to Q4
             earnings_data = get_earnings_call_transcript(company_name, year, quarter)
             if earnings_data:
-                transcripts[f"Q{quarter}"] = earnings_data
+                transcripts[quarter] = earnings_data
             else:
-                transcripts[f"Q{quarter}"] = "No data available for this quarter."
-        
-        # Step 2: Store the transcripts as embeddings in Pinecone
-        store_transcript_in_pinecone(transcripts, f"{company_name}_{year}")
+                transcripts[quarter] = "No data available for this quarter."
 
-        return transcripts
+        # Store the embeddings for each quarter
+        store_quarterly_embeddings(company_name, year, transcripts)
 
     except Exception as e:
-        logger.error(f"Error summarizing earnings for {company_name}: {str(e)}")
+        logger.error(f"Error fetching or storing data for {company_name}: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
