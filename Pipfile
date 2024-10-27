@@ -1,0 +1,22 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+requests = "*"
+beautifulsoup4 = "*"
+langchain = "*"
+openai = "*"
+fastapi = "*"
+pinecone-client = "*"
+uvicorn = "*"
+langchain-community = "*"
+python-dotenv = "*"
+langchain-openai = "*"
+
+[dev-packages]
+
+[requires]
+python_version = "3.11"
+python_full_version = "3.11.9"
